@@ -1,0 +1,17 @@
+apiVersion: platform.adminwg.dad/v1alpha1
+kind: ServiceApp
+metadata:
+  name: engine-api
+spec:
+  image:
+    repository: harbor.example.com/game-engine/engine-api
+    tag: main
+  service:
+    port: 8080
+  resources:
+    profile: medium
+  route:
+    enabled: true
+    host: engine-api.example.internal
+  secretStore:
+    enabled: true

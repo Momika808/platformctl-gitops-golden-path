@@ -1,0 +1,37 @@
+apiVersion: platform.adminwg.dad/v1alpha1
+kind: ServiceApp
+metadata:
+  name: demo
+spec:
+  layer: 11-rag
+  namespace: rag
+  image:
+    repository: harbor.home.arpa/example/demo
+    tag: main
+    digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+    pullPolicy: IfNotPresent
+  service:
+    port: 8080
+  containerPort: 8080
+  env:
+    DEMO_MODE: "on"
+    LOG_LEVEL: info
+  secretEnv:
+    - name: API_KEY
+      secretName: demo-secret
+      key: api-key
+      optional: true
+  resources:
+    profile: small
+  health:
+    path: /healthz
+  route:
+    enabled: true
+    host: demo.home.arpa
+    path: /
+  imageAutomation:
+    enabled: true
+    tagPattern: '^main$'
+    order: asc
+    harborCASecret: custom-ca
+    registrySecret: custom-registry
