@@ -1,0 +1,7 @@
+name: vso-game-engine
+policy_file: policies/vso-game-engine.hcl
+bound_service_account_names:
+  - vso-game-engine
+bound_service_account_namespaces:
+  - game-engine
+token_type: batch

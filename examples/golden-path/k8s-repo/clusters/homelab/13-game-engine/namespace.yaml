@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: game-engine
+  labels:
+    platform.adminwg.dad/managed-by: platformctl
+    platform.adminwg.dad/app: game-engine
+    platform.adminwg.dad/layer: 13-game-engine
