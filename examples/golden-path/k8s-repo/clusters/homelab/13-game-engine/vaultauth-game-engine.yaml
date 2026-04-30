@@ -1,0 +1,13 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: vso-game-engine
+  namespace: game-engine
+spec:
+  method: kubernetes
+  mount: kubernetes
+  kubernetes:
+    role: vso-game-engine
+    serviceAccount: vso-game-engine
+    audiences:
+      - https://kubernetes.default.svc

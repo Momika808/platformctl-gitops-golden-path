@@ -1,0 +1,20 @@
+validate:
+  stage: validate
+  tags: [fast-ci]
+  script:
+    - terraform fmt -check -recursive
+    - terraform validate
+
+plan:
+  stage: plan
+  script:
+    - terraform plan -out tfplan
+
+apply:
+  stage: apply
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      when: on_success
+    - when: never
+  script:
+    - terraform apply -auto-approve tfplan

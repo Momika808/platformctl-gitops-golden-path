@@ -1,0 +1,16 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+    - when: never
+
+validate:platformctl:
+  stage: validate
+  tags: [fast-ci]
+  rules:
+    - changes:
+        - tools/platformctl/**/*
+        - clusters/homelab/**/*
+  script:
+    - ./scripts/platformctl.sh validate --all
+    - ./scripts/platformctl.sh render --all
