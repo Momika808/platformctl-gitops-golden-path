@@ -22,7 +22,7 @@ This document describes the architecture in enough detail to communicate the des
 
 - This is not a chatbot. There is no built-in LLM call. Consumers of `assist` (an operator, a CI step, an external agent) decide how to use the retrieved chunks.
 - This is not a vector database. The system orchestrates a corpus and provides a search interface; Qdrant, when used, is an optional backend.
-- The retrieval API is not optimised for end-user product search; the [Retrieval API](https://github.com/...) is a separate stack with different SLOs and a different fusion strategy.
+- This is not the retrieval layer for end-user product search. A separate platform service (the "Retrieval API") covers that use case with a different stack, different SLOs and a different fusion strategy; it is out of scope for this document.
 
 ---
 
