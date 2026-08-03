@@ -3,6 +3,9 @@ name: ci
 on:
   push:
   pull_request:
+  schedule:
+    # Еженедельно — чтобы новые CVE в зависимостях находились без коммита
+    - cron: "17 6 * * 1"
 
 permissions:
   contents: read
@@ -17,7 +20,12 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          # Не go-version-file: go.mod — там указана минимальная версия языка,
+          # и setup-go ставил бы ровно её. Патчи безопасности стандартной
+          # библиотеки выходят в более поздних релизах, поэтому собираем
+          # и сканируем на актуальном stable.
+          go-version: stable
+          check-latest: true
           cache: true
 
       - name: Check formatting (gofmt)
@@ -36,6 +44,8 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
+        # Блокирующий: сборка на актуальном Go, поэтому находка здесь означает
+        # уязвимость в коде или в зависимостях, а не отставание рантайма.
 
   secret-scan:
     runs-on: ubuntu-latest
