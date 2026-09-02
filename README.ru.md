@@ -1,111 +1,109 @@
-# platformctl — GitOps Golden Path
+# platformctl: GitOps Golden Path
 
-> **Статус:** публичный design-showcase / альфа. Этот репозиторий демонстрирует архитектурные идеи внутреннего платформенного CLI, который работает в production-кластере. Это **не** готовый open-source продукт — полная реализация, включая RAG-подсистему `assist`, оркестрацию деплоев и observability-подкоманды, живёт в приватной кодобазе. Этот репозиторий — портфолио-артефакт для разговоров с работодателями и референс для похожих платформенных инициатив.
+English version: [README.md](README.md)
 
-`platformctl` — это Go CLI, который автоматизирует жизненный цикл приложений и сервисов в Kubernetes через строгий GitOps-пайплайн. Принцип простой: **Git + Merge Request + CI + Flux — это единственный путь до кластера**. Сама CLI никогда не делает `kubectl apply` — она генерирует манифесты, валидирует их по схемам, открывает MR в нужных репозиториях, а дальше Flux приводит кластер к нужному состоянию.
+> **Статус:** публичная витрина архитектуры, alpha. Репозиторий показывает устройство внутренней платформенной CLI, которая работает в боевом кластере. Это не готовый open-source продукт. Полная реализация лежит в приватном коде; этот репозиторий сделан для разговоров о найме и как справочник для похожих платформ.
 
-Этот README описывает **полный дизайн**, а не только подмножество кода, которое сейчас в репозитории. Каждая команда имеет маркировку:
+`platformctl` — CLI на Go, которая ведёт жизненный цикл приложений в Kubernetes через строгий GitOps-конвейер. Принцип: **Git + Merge Request + CI + Flux — единственный путь в кластер.** CLI никогда не выполняет `kubectl apply`. Она генерирует манифесты, проверяет их по схемам, открывает merge request в нужных репозиториях и оставляет применение Flux.
 
-- `[open]` — реализация присутствует в этом репозитории
-- `[private]` — реализовано и работает в production-платформе, дизайн описан здесь, но код пока не выложен
+![Архитектура platformctl](docs/platformctl_architecture.png)
 
----
+## Запустить одной командой
 
-## Зачем это существует
+```bash
+scripts/demo.sh
+```
 
-У платформенных команд есть повторяющаяся проблема: с ростом кластера онбординг нового приложения требует ручных правок в двух-трёх разных репозиториях (манифесты, политики Vault, переменные CI), запуска ad-hoc проверок и удержания в голове постоянно меняющегося чек-листа. Каждая команда изобретает свой способ это делать, и ошибки копятся.
+Нужны `go`, `git` и `kubectl`. Кластер, реестр и GitLab не нужны. Скрипт собирает CLI, копирует пару репозиториев из `examples/demo-repo` во временный каталог и прогоняет все открытые команды: `validate`, `render`, `doctor`, `new-app`, `doctor` на созданном слое, `delete-app`. Тот же скрипт работает в CI. Подробности: [`docs/demo.md`](docs/demo.md).
 
-`platformctl` сводит это к одному Go-бинарю с несколькими принципиальными гарантиями:
+## Зачем это нужно
 
-1. **Разделение read-plane и write-plane.** Read-команды (`validate`, `render`, `doctor`, `assist`, `metrics` и т.д.) идемпотентны и безопасны — агенты и люди могут их вызывать сколько угодно. Write-команды (`new-app`, `delete-app`, `secrets sync-gitlab-ci` и т.д.) по умолчанию работают в режиме dry-run и требуют явных `--apply --confirm`, чтобы что-то мутировать.
-2. **Никакой прямой мутации кластера.** Записи идут через Git: команда открывает Merge Request в соответствующем репозитории, CI его валидирует, Flux применяет. CLI — это фабрика манифестов, не обёртка над kubectl.
-3. **Schema-first.** Каждая спецификация, с которой работает CLI (`appspec`, `service-app`, `product-deployment`, `runbook-frontmatter`, контракты Retrieval API и т.д.), имеет JSON Schema. CI отклоняет невалидные спецификации до того, как они дойдут до кластера.
-4. **Agent-friendly output.** Каждая команда поддерживает `--output text | json | minimal-json`. Режим `minimal-json` срезает API-envelope и не-обязательные поля, уменьшая потребление токенов LLM-агентами на 30–50%.
-5. **RAG как полноценная подсистема.** Встроенная подкоманда `assist` даёт retrieval-слой над корпусом runbook: schema-aware ingestion, lexical-поиск как стабильный default, eval по golden-вопросам как CI-gate. Операторы и AI-агенты пользуются одним и тем же retrieval-интерфейсом.
+Кластер растёт, и заведение одного приложения превращается в ручные правки в двух-трёх репозиториях (манифесты, политики Vault, переменные CI), проверку на глаз и чек-лист, который меняется каждый месяц. Каждая команда изобретает свой способ, ошибки копятся.
 
----
+`platformctl` сводит это к одному бинарнику с четырьмя правилами:
+
+1. **Чтение и запись разделены.** Команды чтения (`validate`, `render`, `doctor`, ...) идемпотентны, их безопасно вызывать из скриптов и агентов. Команды записи (`new-app`, `delete-app`, ...) по умолчанию меняют только локальные файлы, merge request открывается по явному флагу.
+2. **Кластер напрямую не меняется.** Запись идёт через Git: команда открывает merge request, CI проверяет, Flux применяет. CLI — фабрика манифестов, а не обёртка над kubectl.
+3. **Сначала схема.** У каждой спецификации есть JSON Schema. CI отклоняет невалидные спецификации до того, как они дойдут до кластера.
+4. **Вывод для людей и для скриптов.** В приватной сборке у каждой команды есть `--output text | json | minimal-json`; команды в этом репозитории печатают только текст.
+
+В приватной сборке есть ещё поисковый слой над корпусом runbook-ов (`assist`), которым через один интерфейс пользуются операторы и LLM-агенты. Его устройство описано в [`docs/assist-design.md`](docs/assist-design.md); кода здесь нет.
 
 ## Карта команд
 
-### Read-plane (идемпотентные)
+Метки у команд:
+
+- `[open]`: реализация есть в этом репозитории
+- `[open, skeleton]`: есть в сокращённом виде
+- `[private]`: работает в боевой платформе, описание здесь, код не открыт
+
+### Чтение (идемпотентно)
 
 | Команда | Статус | Назначение |
 |---|---|---|
-| `validate [--all]` | `[open]` | Валидация `appspec` / service-спецификаций по JSON Schema |
-| `render [--all]` | `[open]` | Рендеринг сгенерированных манифестов из канонических источников |
-| `doctor [--all\|<check>]` | `[open]` | Health-проверки: CNI, kube-context, CA/auth registry, policy-reports, lifecycle |
-| `config <view/use-context/init/validate>` | `[private]` | Multi-context runtime-конфигурация |
-| `assist <search/runbook/explain/diagnose/eval/validate-corpus/export-qdrant/prepare-qdrant-upsert/upstream-refresh>` | `[private]` | RAG-подсистема над корпусом runbook (см. `docs/assist-design.ru.md`) |
-| `docs suggest` | `[private]` | Подсказка, какие docs/runbook затронуты изменением |
-| `hubble <status/observe/why-dropped>` | `[private]` | Network observability через Cilium Hubble |
-| `logs <status/query>` | `[private]` | Loki-запросы из CLI |
-| `metrics <status/query/app>` | `[private]` | PromQL-запросы с app-aware агрегацией |
-| `upgrade plan` | `[private]` | Парсинг плана апгрейдов на основе Renovate-данных |
-| `deploy <init/validate/scaffold/promote/status/ci-generate>` | `[private]` | Workflow продуктового деплоя |
-| `observe collect` | `[private]` | Локальный evidence-bundle на инциденты |
-| `export-public` | `[open]` | Хелпер для зеркалирования curated-подмножества в публичный репозиторий (вот этот) |
+| `validate [--all]` | `[open]` | Проверка спецификаций по JSON Schema |
+| `render [--all]` | `[open]` | Генерация манифестов из канонических спецификаций |
+| `doctor [--all\|--layer\|--app]` | `[open]` | Проверки: связка слоя, контракт Vault, SAN сертификата, CA и доступ реестра, сборка kustomize, ёмкость |
+| `config <view/use-context/init/validate>` | `[private]` | Конфигурация с несколькими контекстами |
+| `assist <search/runbook/explain/diagnose/eval/...>` | `[private]` | Поиск по корпусу runbook-ов, см. `docs/assist-design.md` |
+| `docs suggest` | `[private]` | Какие документы затрагивает изменение |
+| `hubble <status/observe/why-dropped>` | `[private]` | Сетевая наблюдаемость через Cilium Hubble |
+| `logs <status/query>` | `[private]` | Запросы к Loki из CLI |
+| `metrics <status/query/app>` | `[private]` | PromQL с агрегацией по приложению |
+| `upgrade plan` | `[private]` | Разбор плана обновлений от Renovate |
+| `deploy <init/validate/scaffold/promote/status/ci-generate>` | `[private]` | Выкатка продуктов |
+| `observe collect` | `[private]` | Сбор улик при инциденте |
+| `export-public` | `[open]` | Перенос выбранной части в публичный репозиторий (этот) |
 
-### Write-plane (gated, dry-run по умолчанию)
+### Запись (по умолчанию только локальные изменения)
 
-| Команда | Статус | Safety-модель |
+| Команда | Статус | Модель безопасности |
 |---|---|---|
-| `new-app <name>` | `[open]` | dry-run по умолчанию; `--auto` запускает полный flow |
-| `new-service <name>` | `[open]` | dry-run по умолчанию |
-| `new-product <name> --gitlab-path <path>` | `[private]` | Phase-4 автономный онбординг продукта (открывает Vault MR + product MR) |
-| `delete-app <ns>/<app>` | `[open]` | `--auto-merge` только под явный GO |
-| `secrets sync-gitlab-ci` | `[private]` | Ротация переменных GitLab CI из Vault; dry-run по умолчанию |
-| `registry-ca sync` | `[private]` | Синхронизация registry CA-секрета по кластеру |
-| `runners <list/reconcile/rotate/revoke>` | `[private]` | Lifecycle GitLab CI runners |
-| `harbor-robot create` | `[private]` | Создание robot-аккаунта Harbor registry |
-| `infra kubelet-provider` | `[private]` | Talos infra-операции |
-| `bootstrap` | `[private]` | Bootstrap кластера; break-glass only |
+| `new-app <name>` | `[open]` | создаёт файлы локально; `--auto` открывает merge request и ждёт CI |
+| `new-service <name>` | `[open]` | создаёт файлы локально |
+| `new-product <name> --gitlab-path <path>` | `[private]` | автономное заведение продукта: MR в Vault и MR продукта |
+| `delete-app <ns>/<app>` | `[open]` | печатает двухфазный план; merge request только с `--create-mr --confirm=<ns>` |
+| `secrets sync-gitlab-ci` | `[private]` | Ротация переменных GitLab CI из Vault; по умолчанию dry-run |
+| `registry-ca sync` | `[private]` | Синхронизация CA реестра по кластеру |
+| `runners <list/reconcile/rotate/revoke>` | `[private]` | Жизненный цикл раннеров GitLab CI |
+| `harbor-robot create` | `[private]` | Создание робота Harbor |
+| `infra kubelet-provider` | `[open, skeleton]` | Операции с Talos; здесь в сокращённом виде |
+| `bootstrap` | `[private]` | Первичная сборка кластера; только break-glass |
 
----
+## Что показывает репозиторий
 
-## Что репозиторий демонстрирует сейчас
+- **Модель спецификации приложения** (`internal/appspec`): структура данных и правила проверки, на которых держится остальное.
+- **Поток `new-app`** (`cmd/platformctl`): как команда заведения собирает спецификации, генерирует манифесты и регистрирует слой во Flux.
+- **Граница GitOps**: `platformctl` ничего не применяет сама, только предлагает изменения, которые применяет Flux.
+- **Разделение чтения и записи**: форма команд отражает дисциплину эксплуатации.
+- **Рабочий пример** (`examples/demo-repo`): канонический слой платформенного репозитория с контрактом Vault, который прогоняет `scripts/demo.sh`.
 
-- **Модель спецификации приложения** (`internal/appspec`) — структура данных и правила валидации, на которых строится всё остальное.
-- **Flow команды `new-app`** (`cmd/platformctl`) — как onboarding-команда композирует спецификации, рендерит манифесты и выдаёт результат, пригодный для CI-driven MR.
-- **GitOps-граница** — намеренный выбор: `platformctl` никогда не применяет ничего сама, только предлагает изменения для Flux.
-- **Разделение read/write-plane** — даже на этой ранней стадии форма команд отражает операционную дисциплину.
-- **Примеры** (`examples/golden-path/`) — канонический layout сервиса в платформенном репозитории.
+## Что описано, но не открыто
 
----
+- Поисковая подсистема `assist`: лексический ретривер, экспорт в Qdrant, оценка по золотым вопросам, проверка корпуса по схеме. Архитектура в `docs/assist-design.md`.
+- Оркестрация выкатки (`deploy`): каркас, продвижение, статус, генерация дочерних пайплайнов CI.
+- Эксплуатационные команды (`hubble`, `logs`, `metrics`, `observe`): оборачивают внутренние эндпоинты.
+- Секреты и реестр (`secrets`, `registry-ca`, `harbor-robot`): привязаны к внутренней инфраструктуре.
 
-## Что описано, но пока не выложено
+Что и когда переедет через границу: [`docs/roadmap.md`](docs/roadmap.md).
 
-Репозиторий намеренно не содержит следующих частей production-имплементации:
+## Документы
 
-- RAG-подсистема `assist` (lexical-retriever, Qdrant-экспортёр, golden-question evaluator, schema-aware валидатор корпуса). Архитектура описана в `docs/assist-design.ru.md`.
-- Оркестрация деплоев (семейство команд `deploy`) — scaffolding, promotion, status tracking, генерация child CI-пайплайнов.
-- Подкоманды операций (`hubble`, `logs`, `metrics`, `observe`) — они оборачивают внутренние эндпоинты и потребуют нетривиальной развязки.
-- Plumbing для секретов и registry (`secrets`, `registry-ca`, `harbor-robot`) — тесно завязаны на конкретную внутреннюю инфраструктуру.
+- [`docs/architecture.md`](docs/architecture.md): чтение и запись, фабрика манифестов, граница GitOps
+- [`docs/assist-design.md`](docs/assist-design.md): поисковая подсистема, лексический поиск по умолчанию, контракты корпуса, оценка в CI
+- [`docs/roadmap.md`](docs/roadmap.md): что публикуется, когда, что остаётся приватным
+- [`docs/demo.md`](docs/demo.md): что запускает `scripts/demo.sh` и что это доказывает
 
-Эти модули будут переезжать в публичный репозиторий итеративно; см. `docs/roadmap.ru.md`.
+## Чем это не является
 
----
-
-## Design-документы
-
-- [`docs/architecture.ru.md`](docs/architecture.ru.md) — read/write plane, паттерн «фабрика манифестов», GitOps-граница
-- [`docs/assist-design.ru.md`](docs/assist-design.ru.md) — RAG-подсистема: lexical-as-default, schema-aware corpus contracts, CI-gated retrieval eval
-- [`docs/roadmap.ru.md`](docs/roadmap.ru.md) — что публикуется, когда и что остаётся приватным
-- [`docs/demo.md`](docs/demo.md) — прохождение flow `new-app`
-
----
-
-## Non-goals
-
-- Этот CLI **не** замена `kubectl`. Он никогда не обращается к Kubernetes API для мутирующих операций.
-- Это **не** замена Flux. Flux остаётся единственным reconciler-ом.
-- Публичный репозиторий **не** turnkey-инсталляция платформы. Это design-референс.
-
----
+- Не замена `kubectl`. К API кластера на запись CLI не обращается.
+- Не замена Flux. Flux остаётся единственным применяющим.
+- Не платформа «поставил и работает». Это справочник по архитектуре с работающим ядром.
 
 ## Лицензия
 
-Apache-2.0. См. [`LICENSE`](LICENSE).
+Apache-2.0, см. [`LICENSE`](LICENSE).
 
-## Security
+## Безопасность
 
-См. [`SECURITY.md`](SECURITY.md) для политики ответственного раскрытия уязвимостей.
+Политика раскрытия: [`SECURITY.md`](SECURITY.md).

@@ -1,0 +1,29 @@
+apiVersion: platform.adminwg.dad/v1alpha1
+kind: ServiceApp
+metadata:
+  name: demo
+spec:
+  layer: 11-demo
+  namespace: demo
+  image:
+    repository: harbor.example.internal/demo/demo
+    tag: main
+    digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
+    pullPolicy: IfNotPresent
+  service:
+    port: 8080
+  containerPort: 8080
+  env:
+    LOG_LEVEL: info
+  resources:
+    profile: small
+  health:
+    path: /healthz
+  route:
+    enabled: true
+    host: demo.example.internal
+    path: /
+  imageAutomation:
+    enabled: true
+    tagPattern: '^main$'
+    order: asc

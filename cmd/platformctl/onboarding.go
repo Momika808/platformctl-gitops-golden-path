@@ -192,6 +192,7 @@ func runNewApp(args []string) error {
 		registerKS         bool
 		gatewayAccessLabel string
 		vaultSecretPath    string
+		harborCATemplate   string
 		withVaultScaffold  bool
 		withVaultMR        bool
 		vaultRepoRoot      string
@@ -236,6 +237,7 @@ func runNewApp(args []string) error {
 	fsNewApp.BoolVar(&registerKS, "register-ks", true, "register ks file in root flux kustomizations")
 	fsNewApp.StringVar(&gatewayAccessLabel, "gateway-access-label", "allow", "namespace label gateway-access value")
 	fsNewApp.StringVar(&vaultSecretPath, "vault-secret-path", "harbor/robots/dota2-assistant-runtime-pull", "Vault path for pull robot secret")
+	fsNewApp.StringVar(&harborCATemplate, "harbor-ca-template", "clusters/homelab/09-dota2-assistant/harbor-oci-ca.yaml", "path (relative to repo root) of the harbor-oci-ca.yaml template copied into the new layer")
 	fsNewApp.BoolVar(&withVaultScaffold, "with-vault-scaffold", false, "create roles.d/policies scaffold in vault-control-plane repository")
 	fsNewApp.BoolVar(&withVaultMR, "with-vault-mr", false, "create/push branch and open merge request in vault-control-plane (requires --with-vault-scaffold)")
 	fsNewApp.StringVar(&vaultRepoRoot, "vault-repo-root", "", "path to vault-control-plane repository (default ../vault-control-plane)")
@@ -475,10 +477,13 @@ resources:
 	if err := os.WriteFile(filepath.Join(layerDir, "vaultstaticsecret-harbor-pull.yaml"), []byte(vaultStaticSecretYAML), 0o644); err != nil {
 		return err
 	}
-	harborCATemplate := filepath.Join(root, "clusters", "homelab", "09-dota2-assistant", "harbor-oci-ca.yaml")
-	harborCAData, err := os.ReadFile(harborCATemplate)
+	harborCATemplatePath := harborCATemplate
+	if !filepath.IsAbs(harborCATemplatePath) {
+		harborCATemplatePath = filepath.Join(root, filepath.FromSlash(harborCATemplatePath))
+	}
+	harborCAData, err := os.ReadFile(harborCATemplatePath)
 	if err != nil {
-		return fmt.Errorf("read harbor CA template %s: %w", relPath(root, harborCATemplate), err)
+		return fmt.Errorf("read harbor CA template %s: %w", relPath(root, harborCATemplatePath), err)
 	}
 	if err := os.WriteFile(filepath.Join(layerDir, "harbor-oci-ca.yaml"), harborCAData, 0o644); err != nil {
 		return err

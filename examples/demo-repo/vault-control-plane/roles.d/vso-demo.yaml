@@ -1,0 +1,7 @@
+name: vso-demo
+policy_file: policies/vso-demo.hcl
+bound_service_account_names:
+  - vso-demo
+bound_service_account_namespaces:
+  - demo
+token_type: batch

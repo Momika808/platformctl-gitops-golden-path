@@ -341,6 +341,9 @@ func (d *doctorChecker) checkLayerKustomizeBuild(layer string) {
 
 func gitStatusPorcelain(path string) (string, error) {
 	cmd := exec.Command("git", "status", "--porcelain", "--", path)
+	// Run inside the checked repository: the CLI may be invoked from another
+	// working directory with --repo-root pointing elsewhere.
+	cmd.Dir = filepath.Dir(path)
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &out

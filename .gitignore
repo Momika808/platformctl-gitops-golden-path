@@ -3,3 +3,8 @@ bin/
 *.test
 *.out
 coverage.txt
+
+# local drafts and unused artwork, never published
+docs/habr*
+docs/platformctl_cover_banner.png
+docs/platformctl_lifecycle.png

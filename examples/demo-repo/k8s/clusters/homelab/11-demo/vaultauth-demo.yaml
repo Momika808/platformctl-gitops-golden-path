@@ -1,0 +1,14 @@
+apiVersion: secrets.hashicorp.com/v1beta1
+kind: VaultAuth
+metadata:
+  name: vso-demo
+  namespace: demo
+spec:
+  method: kubernetes
+  mount: kubernetes
+  vaultConnectionRef: vault-secrets-operator/default
+  kubernetes:
+    role: vso-demo
+    serviceAccount: vso-demo
+    audiences:
+      - https://kubernetes.default.svc

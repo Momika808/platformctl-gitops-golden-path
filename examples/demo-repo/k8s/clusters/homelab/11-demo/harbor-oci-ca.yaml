@@ -1,0 +1,12 @@
+# Placeholder CA bundle for the demo. In the platform repository this ConfigMap
+# carries the internal registry CA and is copied into every new layer by new-app.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: harbor-oci-ca
+  namespace: demo
+data:
+  ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBDEMOCERTIFICATEPLACEHOLDERNOTAREALCERTIFICATE0000000000000000
+    -----END CERTIFICATE-----

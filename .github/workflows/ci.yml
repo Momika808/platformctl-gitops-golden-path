@@ -40,6 +40,9 @@ jobs:
       - name: Run tests
         run: go test ./...
 
+      - name: Run demo
+        run: bash scripts/demo.sh
+
       - name: Run govulncheck
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest

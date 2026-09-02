@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: demo
+resources:
+  - namespace.yaml
+  - serviceaccount-vso.yaml
+  - vaultauth-demo.yaml
+  - vaultstaticsecret-harbor-pull.yaml
+  - harbor-oci-ca.yaml
+  - apps/demo
